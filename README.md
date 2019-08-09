@@ -8,4 +8,4 @@
 
 `composer install`
 
-`php `
+`php exportmd.php`
