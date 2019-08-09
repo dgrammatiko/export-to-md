@@ -138,7 +138,7 @@ TXT;
 
     // Now let's create that file
     file_put_contents(
-      JPATH_ROOT . '/' . $this->baseFolder . '/' . (trim($options['category']) !== 'Uncategorised' ? '/' . trim($options['category']) : '') . '/' . $options['slug'] . '.md',
+      JPATH_ROOT . '/' . $this->baseFolder . '/' . (trim($options['category']) !== 'Uncategorised' ? '/' . trim($options['category']) : '') . $options['slug'] . '.md',
       $options['content'],
       0
     );
