@@ -1,6 +1,10 @@
 #!/usr/bin/env php
 <?php
-/** 
+// Where shall we export the data to?
+define('BASEFOLDER', 'some_folder_name_goes_here');
+
+
+/**
  * Joomla default section START
  */
 // We are a valid entry point.
@@ -28,14 +32,11 @@ require_once JPATH_CONFIGURATION . '/configuration.php';
 // Import the HTML To Markdown for PHP
 require __DIR__ . '/vendor/autoload.php';
 
-// System configuration.
-$config = new JConfig;
-
 // Configure error reporting to maximum for CLI output.
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-/** 
+/**
  * Joomla default section END
  */
 use Joomla\CMS\Factory;
@@ -48,12 +49,9 @@ use Joomla\CMS\Helper\TagsHelper;
  */
 class ExportToMd extends CliApplication {
 
-    // Where shall we export the data to?
-    private $baseFolder = 'articles_md';
-
   /** Run Forest, run... */
   public function execute( ) {
-      // Get the articles
+    // Get the articles
     $articles = $this->getAllArticles();
 
     // The converter
@@ -81,28 +79,33 @@ class ExportToMd extends CliApplication {
 
       for ($i=0; $i<count($tags); $i++) {
         $suffix = $i+1 < count($tags) ? ', ' : '';
-        $tagsStr .= trim($tags[$i]->title) . $suffix;
+        $tagsStr .= '"' . trim($tags[$i]->title) . '"' . $suffix;
       }
 
       $db = Factory::getDbo();
       $db->setQuery("SELECT cat.title FROM #__categories cat WHERE cat.id='$article->catid'");
       $category_title = $db->loadResult();
 
+      $category_title = strtolower(trim($category_title));
       $introtext = $converter->convert($article->introtext);
       $fulltext = $converter->convert($article->fulltext);
       $images = json_decode($article->images);
 
+      $date = new Joomla\CMS\Date\Date($article->created);
+      $dateString = $date->toISO8601();
       $content =
-<<<TXT
+        <<<TXT
 ---json
 {
-  "title": "$article->title"
-  "tags": "$tagsStr"
-  "date": "$article->created"
-  "introImage" : "$images->image_intro"
-  "introImageAlt" : "$images->image_intro_alt"
-  "fulltextImage" : "$images->image_fulltext"
-  "fulltextImageAlt" : "$images->image_fulltext_alt"
+  "title": "$article->title",
+  "description": "$article->metadesc",
+  "tags": [$tagsStr],
+  "date": "$dateString",
+  "introImage" : "$images->image_intro",
+  "introImageAlt" : "$images->image_intro_alt",
+  "fulltextImage" : "$images->image_fulltext",
+  "fulltextImageAlt" : "$images->image_fulltext_alt",
+  "layout": "layouts/$category_title.njk"
 }
 ---
 $introtext
@@ -110,11 +113,11 @@ $introtext
 $fulltext
 TXT;
 
-        $this->createFile([
-            'category' => $category_title,
-            'slug' => $article->alias,
-            'content' => $content
-        ]);
+      $this->createFile([
+        'category' => $category_title,
+        'slug' => $article->alias,
+        'content' => $content
+      ]);
     }
 
     exit(0);
@@ -122,27 +125,36 @@ TXT;
 
   /** Now let's save to a new file */
   private function createFile($options) {
-      if (empty($options) || !isset($options['category']) || !isset($options['slug']) || !isset($options['content'])) {
-          return;
-      }
-
-      // Make sure we have the base dir for the converted files
-    if (!is_dir(JPATH_ROOT . '/' . $this->baseFolder)) {
-        mkdir(JPATH_ROOT . '/' . $this->baseFolder);
+    if (empty($options) || !isset($options['category']) || !isset($options['slug']) || !isset($options['content'])) {
+      return;
     }
+
+    $isRoot = strtolower(trim($options['category'])) === 'uncategorised' ?? true;
+
+
+    // Make sure we have the base dir for the converted files
+    if (!is_dir(JPATH_ROOT . '/' . BASEFOLDER)) {
+      mkdir(JPATH_ROOT . '/' . BASEFOLDER);
+    }
+
+    $base = $isRoot === true ? JPATH_ROOT . '/' . BASEFOLDER . '/' : JPATH_ROOT . '/';
 
     // Do we have the category Folder?
-    if (trim($options['category']) !== 'Uncategorised' && !is_dir(JPATH_ROOT . '/' . $this->baseFolder . '/' . trim($options['category']))) {
-      mkdir(JPATH_ROOT . '/' . $this->baseFolder . '/' . trim($options['category']));
+    if ($isRoot === false && !is_dir($base . trim($options['category']))) {
+      mkdir($base . trim($options['category']));
     }
+
+    // The path of the file
+    $filename = $base . ($isRoot === false ?  strtolower(trim($options['category'])) . '/' : '') . $options['slug'] . '.md';
 
     // Now let's create that file
     file_put_contents(
-      JPATH_ROOT . '/' . $this->baseFolder . '/' . (trim($options['category']) !== 'Uncategorised' ? '/' . trim($options['category']) : '') . $options['slug'] . '.md',
+      $filename,
       $options['content'],
       0
     );
   }
+
   /** Get all the articles */
   private function getAllArticles()
   {
