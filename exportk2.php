@@ -120,6 +120,7 @@ class ExportToMd extends CliApplication {
 
       $content =
 <<<TXT
+---
   title: $article->title
   description: $article->metadesc
   tags: $tagsFinal
